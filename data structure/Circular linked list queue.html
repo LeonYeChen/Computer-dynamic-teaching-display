@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>循环链表队列 可视化</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            .queue-node {
+                transition: all 0.4s ease-out;
+                z-index: 10;
+                flex-shrink: 0;
+            }
+            .node-highlight {
+                animation: highlight 0.6s ease-in-out;
+            }
+            @keyframes highlight {
+                0%,
+                100% {
+                    filter: brightness(1);
+                }
+                50% {
+                    filter: brightness(1.4);
+                }
+            }
+            .log-container {
+                scrollbar-width: thin;
+                scrollbar-color: #3b82f6 #e5e7eb;
+            }
+            /* 确保容器可以相对定位，方便 SVG 绝对定位覆盖 */
+            #visualizationWrapper {
+                position: relative;
+                overflow-x: auto;
+                min-height: 250px;
+            }
+        </style>
+    </head>
+    <body class="bg-slate-50 min-h-screen p-5 font-sans">
+        <div class="max-w-6xl mx-auto">
+            <div class="mb-6">
+                <h2
+                    class="text-xl font-bold text-gray-700 mb-2 flex items-center gap-2"
+                >
+                    📦 循环链表可视化
+                    <span
+                        class="text-sm bg-blue-100 text-blue-600 px-3 py-1 rounded-full"
+                        >队头(Front) ← 队列 ← 队尾(Rear)</span
+                    >
+                    <span
+                        class="text-sm bg-purple-100 text-purple-600 px-3 py-1 rounded-full"
+                        >rear.next = front 循环闭环</span
+                    >
+                </h2>
+            </div>
+
+            <!-- 核心可视化区域 -->
+            <div class="bg-white rounded-2xl shadow-lg p-8 mb-6">
+                <div
+                    id="visualizationWrapper"
+                    class="border-2 border-dashed border-gray-300 rounded-lg bg-gray-50"
+                >
+                    <!-- SVG箭头层 -->
+                    <svg
+                        id="arrowLayer"
+                        class="absolute left-0 top-0 pointer-events-none z-0"
+                    ></svg>
+                    <!-- 节点容器 -->
+                    <div
+                        id="nodeContainer"
+                        class="relative z-10 flex flex-nowrap justify-start items-center gap-16 p-20 min-w-full"
+                    >
+                        <div class="text-gray-400 text-lg w-full text-center">
+                            队列为空，点击按钮开始操作
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 实时数据展示 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div class="bg-white rounded-2xl shadow-lg p-6">
+                    <h3
+                        class="text-base font-semibold text-gray-700 mb-2 flex items-center gap-2"
+                    >
+                        📊 当前队列数据
+                    </h3>
+                    <div
+                        id="dataDisplay"
+                        class="text-blue-600 font-mono text-lg p-3 bg-blue-50 rounded"
+                    >
+                        [ ]
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl shadow-lg p-6">
+                    <h3
+                        class="text-base font-semibold text-gray-700 mb-2 flex items-center gap-2"
+                    >
+                        📍 指针状态
+                    </h3>
+                    <div
+                        id="pointerDisplay"
+                        class="text-purple-600 font-mono text-lg p-3 bg-purple-50 rounded"
+                    >
+                        rear: null | front: null
+                    </div>
+                </div>
+            </div>
+
+            <!-- 操作按钮区 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <button
+                    onclick="enqueue()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white py-4 px-3 rounded-xl font-medium transition-all shadow-md hover:shadow-lg text-lg flex items-center justify-center gap-2"
+                >
+                    ➕ 队尾入队(Enqueue)
+                </button>
+                <button
+                    onclick="dequeue()"
+                    class="bg-orange-600 hover:bg-orange-700 text-white py-4 px-3 rounded-xl font-medium transition-all shadow-md hover:shadow-lg text-lg flex items-center justify-center gap-2"
+                >
+                    ➖ 队头出队(Dequeue)
+                </button>
+                <button
+                    onclick="clearQueue()"
+                    class="bg-gray-600 hover:bg-gray-700 text-white py-4 px-3 rounded-xl font-medium transition-all shadow-md hover:shadow-lg text-lg flex items-center justify-center gap-2"
+                >
+                    🗑️ 清空队列
+                </button>
+            </div>
+
+            <!-- 操作步骤日志 -->
+            <div class="bg-white rounded-2xl shadow-lg p-6">
+                <h3
+                    class="text-base font-semibold text-gray-700 mb-3 flex items-center gap-2"
+                >
+                    📝 操作步骤日志
+                </h3>
+                <div
+                    id="logContainer"
+                    class="log-container h-48 overflow-y-auto p-3 bg-gray-50 rounded border border-gray-200"
+                >
+                    <div class="text-gray-500">等待操作...</div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let queue = [];
+            let nodeId = 1;
+            const nodeContainer = document.getElementById("nodeContainer");
+            const arrowLayer = document.getElementById("arrowLayer");
+            const dataDisplay = document.getElementById("dataDisplay");
+            const pointerDisplay = document.getElementById("pointerDisplay");
+            const logContainer = document.getElementById("logContainer");
+
+            function updateDataDisplay() {
+                dataDisplay.textContent = JSON.stringify(
+                    queue.map((item) => item.data),
+                );
+                const rear =
+                    queue.length > 0 ? queue[queue.length - 1].data : "null";
+                const front = queue.length > 0 ? queue[0].data : "null";
+                pointerDisplay.textContent = `rear: ${rear} | front: ${front}`;
+            }
+
+            function addLog(text) {
+                if (logContainer.querySelector(".text-gray-500"))
+                    logContainer.innerHTML = "";
+                const log = document.createElement("div");
+                log.className = "p-2 border-b border-gray-200 last:border-0";
+                log.innerHTML = `<span class="text-blue-600">${new Date().toLocaleTimeString()}</span>：${text}`;
+                logContainer.appendChild(log);
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+
+            // 【核心修复：绘制箭头函数】
+            function drawArrows() {
+                const nodes = nodeContainer.querySelectorAll(".queue-node");
+                arrowLayer.innerHTML = "";
+
+                if (nodes.length < 1) return;
+
+                // 同步画布尺寸到滚动尺寸
+                arrowLayer.setAttribute("width", nodeContainer.scrollWidth);
+                arrowLayer.setAttribute("height", nodeContainer.offsetHeight);
+
+                const defs = document.createElementNS(
+                    "http://www.w3.org/2000/svg",
+                    "defs",
+                );
+                defs.innerHTML = `
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+            </marker>
+            <marker id="arrowhead-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#8b5cf6" />
+            </marker>
+        `;
+                arrowLayer.appendChild(defs);
+
+                nodes.forEach((node, i) => {
+                    const x = node.offsetLeft;
+                    const y = node.offsetTop;
+                    const w = node.offsetWidth;
+                    const h = node.offsetHeight;
+
+                    // 1. 节点间直线
+                    if (i < nodes.length - 1) {
+                        const nextNode = nodes[i + 1];
+                        const startX = x + w;
+                        const startY = y + h / 2;
+                        const endX = nextNode.offsetLeft;
+                        const endY = nextNode.offsetTop + h / 2;
+
+                        const path = document.createElementNS(
+                            "http://www.w3.org/2000/svg",
+                            "path",
+                        );
+                        path.setAttribute(
+                            "d",
+                            `M ${startX} ${startY} L ${endX - 8} ${endY}`,
+                        );
+                        path.setAttribute("stroke", "#64748b");
+                        path.setAttribute("stroke-width", "2");
+                        path.setAttribute("fill", "none");
+                        path.setAttribute("marker-end", "url(#arrowhead)");
+                        arrowLayer.appendChild(path);
+                    }
+
+                    // 2. 尾接头的循环闭环 (Rear -> Front)
+                    if (i === nodes.length - 1) {
+                        const firstNode = nodes[0];
+                        const loopPath = document.createElementNS(
+                            "http://www.w3.org/2000/svg",
+                            "path",
+                        );
+
+                        if (nodes.length === 1) {
+                            // 单节点自环
+                            const cx = x + w / 2;
+                            const cy = y + h / 2;
+                            loopPath.setAttribute(
+                                "d",
+                                `M ${cx + 15} ${cy - 30} A 20 20 0 1 1 ${cx - 15} ${cy - 30}`,
+                            );
+                        } else {
+                            // 多节点大跨度曲线
+                            const startX = x + w - 10;
+                            const startY = y + 5;
+                            const endX = firstNode.offsetLeft + 10;
+                            const endY = y + 5;
+                            const arcH = y - 80; // 曲线高度
+                            loopPath.setAttribute(
+                                "d",
+                                `M ${startX} ${startY} C ${startX} ${arcH}, ${endX} ${arcH}, ${endX} ${startY - 5}`,
+                            );
+                        }
+
+                        loopPath.setAttribute("stroke", "#8b5cf6");
+                        loopPath.setAttribute("stroke-width", "2");
+                        loopPath.setAttribute("fill", "none");
+                        loopPath.setAttribute(
+                            "marker-end",
+                            "url(#arrowhead-purple)",
+                        );
+                        arrowLayer.appendChild(loopPath);
+                    }
+                });
+            }
+
+            function createNodeElement(data, isRear, isFront) {
+                const nodeWrapper = document.createElement("div");
+                nodeWrapper.className =
+                    "queue-node relative flex flex-col items-center";
+
+                const node = document.createElement("div");
+                node.className =
+                    "w-20 h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg shadow-md flex overflow-hidden border-2 border-white";
+                node.innerHTML = `
+            <div class="w-2/3 h-full flex items-center justify-center text-white font-bold text-xl">${data.data}</div>
+            <div class="w-1/3 h-full flex items-center justify-center text-blue-100 font-mono text-[10px] border-l border-blue-400 bg-blue-700/30">next</div>
+        `;
+                nodeWrapper.appendChild(node);
+
+                if (isFront) {
+                    const tag = document.createElement("div");
+                    tag.className =
+                        "absolute -top-10 bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-bold";
+                    tag.innerHTML = `● front`;
+                    nodeWrapper.appendChild(tag);
+                }
+
+                if (isRear) {
+                    const tag = document.createElement("div");
+                    tag.className =
+                        "absolute -bottom-10 bg-purple-500 text-white px-3 py-1 rounded-full text-xs font-bold";
+                    tag.innerHTML = `● rear`;
+                    nodeWrapper.appendChild(tag);
+                }
+
+                return nodeWrapper;
+            }
+
+            function renderQueue(highlightIndex = -1) {
+                if (queue.length === 0) {
+                    nodeContainer.innerHTML =
+                        '<div class="text-gray-400 text-lg w-full text-center">队列为空，点击按钮开始操作</div>';
+                    arrowLayer.innerHTML = "";
+                    return;
+                }
+
+                nodeContainer.innerHTML = "";
+                queue.forEach((item, index) => {
+                    const isRear = index === queue.length - 1;
+                    const isFront = index === 0;
+                    const node = createNodeElement(item, isRear, isFront);
+                    if (index === highlightIndex)
+                        node.classList.add("node-highlight");
+                    nodeContainer.appendChild(node);
+                });
+
+                // 关键：在 DOM 更新后下一帧绘制
+                requestAnimationFrame(() => {
+                    setTimeout(drawArrows, 50);
+                });
+            }
+
+            function enqueue() {
+                const val = nodeId++;
+                queue.push({ id: Date.now(), data: val });
+                updateDataDisplay();
+                renderQueue(queue.length - 1);
+                addLog(`✅ 入队：${val} (Rear 指针移动)`);
+            }
+
+            function dequeue() {
+                if (queue.length === 0) {
+                    addLog("❌ 队列已空");
+                    return;
+                }
+                const removed = queue.shift();
+                updateDataDisplay();
+                renderQueue();
+                addLog(`✅ 出队：${removed.data} (Front 指针移动)`);
+            }
+
+            function clearQueue() {
+                queue = [];
+                nodeId = 1;
+                updateDataDisplay();
+                renderQueue();
+                addLog("🗑️ 队列已清空");
+            }
+
+            window.addEventListener("resize", drawArrows);
+        </script>
+    </body>
+</html>
