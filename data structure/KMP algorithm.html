@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>KMP算法动态可视化</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            .kmp-node {
+                transition: all 0.4s ease-out;
+                z-index: 10;
+                flex-shrink: 0;
+                width: 64px;
+                height: 56px;
+            }
+            .node-highlight {
+                animation: highlight 0.6s ease-in-out;
+            }
+            @keyframes highlight {
+                0%,
+                100% {
+                    filter: brightness(1);
+                }
+                50% {
+                    filter: brightness(1.4);
+                }
+            }
+            .log-container {
+                scrollbar-width: thin;
+                scrollbar-color: #3b82f6 #e5e7eb;
+            }
+            #visualizationWrapper {
+                position: relative;
+                overflow-x: auto;
+                min-height: 420px;
+            }
+            .pointer-tag {
+                transform: translateX(-50%);
+            }
+            .move-container {
+                transition: margin-left 0.5s ease;
+                display: flex;
+                gap: 0;
+            }
+        </style>
+    </head>
+    <body class="bg-slate-50 min-h-screen p-5 font-sans">
+        <div class="max-w-6xl mx-auto">
+            <div class="mb-6">
+                <h2
+                    class="text-xl font-bold text-gray-700 mb-2 flex items-center gap-2"
+                >
+                    🔍 KMP算法动态可视化
+                    <span
+                        class="text-sm bg-blue-100 text-blue-600 px-3 py-1 rounded-full"
+                        >主串(固定)</span
+                    >
+                    <span
+                        class="text-sm bg-orange-100 text-orange-600 px-3 py-1 rounded-full"
+                        >模式串(移动)</span
+                    >
+                    <span
+                        class="text-sm bg-yellow-100 text-yellow-600 px-3 py-1 rounded-full"
+                        >next数组(同步动)</span
+                    >
+                    <span
+                        class="text-sm bg-green-100 text-green-600 px-3 py-1 rounded-full"
+                        >匹配成功</span
+                    >
+                    <span
+                        class="text-sm bg-red-100 text-red-600 px-3 py-1 rounded-full"
+                        >匹配失败</span
+                    >
+                </h2>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label
+                            class="block text-sm font-semibold text-gray-700 mb-2"
+                            >主串 (Text)</label
+                        >
+                        <input
+                            id="textInput"
+                            type="text"
+                            value="ABABCABCABCA"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label
+                            class="block text-sm font-semibold text-gray-700 mb-2"
+                            >模式串 (Pattern)</label
+                        >
+                        <input
+                            id="patternInput"
+                            type="text"
+                            value="ABCABC"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-lg p-8 mb-6">
+                <div
+                    id="visualizationWrapper"
+                    class="border-2 border-dashed border-gray-300 rounded-lg bg-gray-50"
+                >
+                    <svg
+                        id="arrowLayer"
+                        class="absolute left-0 top-0 pointer-events-none z-0"
+                    ></svg>
+                    <div
+                        id="nodeContainer"
+                        class="relative z-10 flex flex-col gap-6 p-6 min-w-full"
+                    >
+                        <div class="text-gray-400 text-lg w-full text-center">
+                            点击初始化开始KMP算法演示
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div class="bg-white rounded-2xl shadow-lg p-6">
+                    <h3
+                        class="text-base font-semibold text-gray-700 mb-2 flex items-center gap-2"
+                    >
+                        📊 算法核心数据
+                    </h3>
+                    <div
+                        id="dataDisplay"
+                        class="text-blue-600 font-mono text-lg p-3 bg-blue-50 rounded"
+                    >
+                        主串: [] | 模式串: []
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl shadow-lg p-6">
+                    <h3
+                        class="text-base font-semibold text-gray-700 mb-2 flex items-center gap-2"
+                    >
+                        📍 指针状态
+                    </h3>
+                    <div
+                        id="pointerDisplay"
+                        class="text-orange-600 font-mono text-lg p-3 bg-orange-50 rounded"
+                    >
+                        i: 0 | j: 0 | 匹配状态: 未开始
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <button
+                    onclick="initKMP()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white py-4 px-3 rounded-xl font-medium transition-all shadow-md hover:shadow-lg text-lg"
+                >
+                    🎯 初始化
+                </button>
+                <button
+                    onclick="nextStep()"
+                    class="bg-orange-600 hover:bg-orange-700 text-white py-4 px-3 rounded-xl font-medium transition-all shadow-md hover:shadow-lg text-lg"
+                >
+                    ⏭️ 单步匹配
+                </button>
+                <button
+                    onclick="autoPlay()"
+                    class="bg-green-600 hover:bg-green-700 text-white py-4 px-3 rounded-xl font-medium transition-all shadow-md hover:shadow-lg text-lg"
+                >
+                    ▶️ 自动播放
+                </button>
+                <button
+                    onclick="resetKMP()"
+                    class="bg-gray-600 hover:bg-gray-700 text-white py-4 px-3 rounded-xl font-medium transition-all shadow-md hover:shadow-lg text-lg"
+                >
+                    🔄 重置
+                </button>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-lg p-6">
+                <h3
+                    class="text-base font-semibold text-gray-700 mb-3 flex items-center gap-2"
+                >
+                    📝 算法执行日志
+                </h3>
+                <div
+                    id="logContainer"
+                    class="log-container h-48 overflow-y-auto p-3 bg-gray-50 rounded border border-gray-200"
+                >
+                    <div class="text-gray-500">等待操作...</div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let text = [],
+                pattern = [],
+                next = [];
+            let i = 0,
+                j = 0,
+                isMatched = false,
+                autoTimer = null;
+            let highlightNextIdx = -1;
+            const NODE_WIDTH = 64;
+
+            const nodeContainer = document.getElementById("nodeContainer");
+            const arrowLayer = document.getElementById("arrowLayer");
+            const dataDisplay = document.getElementById("dataDisplay");
+            const pointerDisplay = document.getElementById("pointerDisplay");
+            const logContainer = document.getElementById("logContainer");
+            const textInput = document.getElementById("textInput");
+            const patternInput = document.getElementById("patternInput");
+
+            const clearTimer = () => {
+                if (autoTimer) {
+                    clearInterval(autoTimer);
+                    autoTimer = null;
+                }
+            };
+
+            function updateDataDisplay() {
+                dataDisplay.textContent = `主串: [${text.join("")}] | 模式串: [${pattern.join("")}] | next: [${next.join(",")}]`;
+                let status = "未开始";
+                if (isMatched) status = "✅ 匹配成功";
+                else if (i < text.length && j < pattern.length)
+                    status = "🔸 比对中";
+                else status = "匹配中";
+                pointerDisplay.textContent = `i: ${i} | j: ${j} | 匹配状态: ${status}`;
+            }
+
+            function addLog(text) {
+                if (logContainer.querySelector(".text-gray-500"))
+                    logContainer.innerHTML = "";
+                const log = document.createElement("div");
+                log.className = "p-2 border-b border-gray-200 last:border-0";
+                log.innerHTML = `<span class="text-blue-600">${new Date().toLocaleTimeString()}</span>：${text}`;
+                logContainer.appendChild(log);
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+
+            function drawPointers() {
+                arrowLayer.innerHTML = "";
+                if (!text.length || !pattern.length) return;
+                arrowLayer.setAttribute("width", nodeContainer.scrollWidth);
+                arrowLayer.setAttribute("height", nodeContainer.offsetHeight);
+            }
+
+            function createCharNode(char, index, isCompare, type = "text") {
+                const wrapper = document.createElement("div");
+                wrapper.className =
+                    "kmp-node relative flex flex-col items-center";
+
+                let bg = "from-blue-500 to-blue-600";
+                if (type === "pattern") bg = "from-purple-500 to-purple-600";
+                if (type === "next") bg = "from-green-500 to-green-600";
+
+                if (isCompare) bg = "from-orange-500 to-orange-600";
+                if (isCompare && text[i] === pattern[j])
+                    bg = "from-green-500 to-green-600";
+                if (isCompare && text[i] !== pattern[j])
+                    bg = "from-red-500 to-red-600";
+                if (type === "next" && index === highlightNextIdx)
+                    bg = "from-yellow-500 to-yellow-600";
+
+                const node = document.createElement("div");
+                node.className = `w-16 h-14 bg-gradient-to-r ${bg} rounded-lg shadow-md flex items-center justify-center text-white font-bold text-xl border-2 border-white`;
+                node.textContent = char;
+
+                const indexTag = document.createElement("div");
+                indexTag.className =
+                    "absolute -bottom-7 text-xs text-gray-600 font-mono";
+                indexTag.textContent = index;
+
+                wrapper.appendChild(node);
+                wrapper.appendChild(indexTag);
+                if (isCompare) wrapper.classList.add("node-highlight");
+                return wrapper;
+            }
+
+            // 🔥 修复核心：删除了这里的 clearTimer，不再打断自动播放
+            function renderKMP() {
+                if (!text.length) {
+                    nodeContainer.innerHTML =
+                        '<div class="text-gray-400 text-lg w-full text-center">点击初始化开始KMP算法演示</div>';
+                    arrowLayer.innerHTML = "";
+                    return;
+                }
+
+                nodeContainer.innerHTML = "";
+                const textRow = document.createElement("div");
+                textRow.className = "flex flex-nowrap gap-0 items-center";
+                textRow.innerHTML =
+                    '<div class="text-sm font-bold text-blue-600 w-28">🔵 主串</div>';
+                text.forEach((c, idx) =>
+                    textRow.appendChild(
+                        createCharNode(c, idx, idx === i, "text"),
+                    ),
+                );
+
+                const offset = (i - j) * NODE_WIDTH;
+
+                const patternRow = document.createElement("div");
+                patternRow.className =
+                    "flex flex-nowrap gap-0 items-center mt-5";
+                patternRow.innerHTML =
+                    '<div class="text-sm font-bold text-orange-600 w-28">🟠 模式串</div>';
+                const patternMove = document.createElement("div");
+                patternMove.className = "move-container";
+                patternMove.style.marginLeft = `${offset}px`;
+                pattern.forEach((c, idx) =>
+                    patternMove.appendChild(
+                        createCharNode(c, idx, idx === j, "pattern"),
+                    ),
+                );
+                patternRow.appendChild(patternMove);
+
+                const nextRow = document.createElement("div");
+                nextRow.className = "flex flex-nowrap gap-0 items-center mt-5";
+                nextRow.innerHTML =
+                    '<div class="text-sm font-bold text-yellow-600 w-28">🟡 next数组</div>';
+                const nextMove = document.createElement("div");
+                nextMove.className = "move-container";
+                nextMove.style.marginLeft = `${offset}px`;
+                next.forEach((val, idx) =>
+                    nextMove.appendChild(
+                        createCharNode(val, idx, false, "next"),
+                    ),
+                );
+                nextRow.appendChild(nextMove);
+
+                nodeContainer.append(textRow, patternRow, nextRow);
+                requestAnimationFrame(() => setTimeout(drawPointers, 50));
+            }
+
+            function getNext() {
+                const n = pattern.length;
+                next = new Array(n).fill(0);
+                let k = 0;
+                for (let i = 1; i < n; i++) {
+                    while (k > 0 && pattern[i] !== pattern[k]) k = next[k - 1];
+                    if (pattern[i] === pattern[k]) k++;
+                    next[i] = k;
+                }
+                addLog(`✅ next数组计算完成: [${next.join(",")}]`);
+            }
+
+            function initKMP() {
+                resetKMP();
+                text = textInput.value.trim().split("");
+                pattern = patternInput.value.trim().split("");
+                if (
+                    !text.length ||
+                    !pattern.length ||
+                    pattern.length > text.length
+                ) {
+                    addLog("❌ 输入不合法！模式串长度不能大于主串");
+                    resetKMP();
+                    return;
+                }
+                i = j = 0;
+                isMatched = false;
+                highlightNextIdx = -1;
+                getNext();
+                updateDataDisplay();
+                renderKMP();
+                addLog(`🎯 初始化成功！模式串+next数组同步移动`);
+            }
+
+            // 🔥 修复：仅在流程完全结束时清除定时器
+            function nextStep() {
+                if (isMatched || i >= text.length) {
+                    clearTimer();
+                    addLog(
+                        isMatched
+                            ? "ℹ️ 自动播放完成：匹配成功！"
+                            : "ℹ️ 自动播放完成：未找到匹配串",
+                    );
+                    return;
+                }
+
+                highlightNextIdx = -1;
+
+                if (j === pattern.length) {
+                    isMatched = true;
+                    addLog(`🎉 匹配成功！模式串起始索引: ${i - j}`);
+                } else if (text[i] === pattern[j]) {
+                    addLog(
+                        `✅ 匹配成功：text[${i}]=${text[i]} = pattern[${j}]=${pattern[j]} → i++, j++`,
+                    );
+                    i++;
+                    j++;
+                } else {
+                    if (j === 0) {
+                        addLog(`❌ 失配，j=0，i++`);
+                        i++;
+                    } else {
+                        highlightNextIdx = j - 1;
+                        const oldJ = j;
+                        j = next[j - 1];
+                        addLog(
+                            `❌ 失配，j = next[${oldJ - 1}] = ${j}（同步移动）`,
+                        );
+                    }
+                }
+                updateDataDisplay();
+                renderKMP();
+            }
+
+            // 🔥 修复：自动播放正常启动，无干扰
+            function autoPlay() {
+                if (autoTimer) return;
+                if (isMatched || i >= text.length) {
+                    addLog("⚠️ 已结束，请重置后再播放");
+                    return;
+                }
+                addLog("▶️ 开始自动匹配演示");
+                autoTimer = setInterval(nextStep, 1500);
+            }
+
+            function resetKMP() {
+                clearTimer();
+                text = pattern = next = [];
+                i = j = 0;
+                isMatched = false;
+                highlightNextIdx = -1;
+                updateDataDisplay();
+                renderKMP();
+                addLog("🔄 已重置所有状态");
+            }
+
+            window.addEventListener("resize", drawPointers);
+        </script>
+    </body>
+</html>

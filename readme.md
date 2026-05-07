@@ -4,6 +4,7 @@
 ### 数据结构 (data structure)
 - `Circular linked list queue.html` - 循环链表队列可视化演示
 - `double-ended queue.html` - 双端队列可视化演示
+- `KMP algorithm.html` - KMP 字符串匹配算法可视化演示
 
 ### 其他科目
 - 计算机组成原理 (Principles of Computer Organization) - 目前为空目录
